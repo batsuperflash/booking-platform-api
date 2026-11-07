@@ -3,6 +3,9 @@
 services:
   postgres:
     image: postgres:16-alpine
+    # depends_on:
+    #   db:
+    #     condition: service_healthy # Ждет именно готовности базы, а не просто старта контейнера
     container_name: booking-platform-postgres
     environment:
       POSTGRES_USER: booking
