@@ -1,0 +1,434 @@
+openapi: 3.1.0
+info:
+  title: Booking Platform API
+  version: 1.0.0
+  description: |
+    Backend API для бронирования ресурсов: комнат, рабочих мест, специалистов и оборудования.
+
+    Главная техническая особенность проекта — защита от двойного бронирования одного слота
+    при одновременных запросах.
+
+servers:
+  - url: http://localhost:8082/api
+    description: Local API through Nginx
+
+tags:
+  - name: Health
+    description: Проверка состояния приложения
+  - name: Resources
+    description: Ресурсы, которые можно бронировать
+  - name: Slots
+    description: Временные слоты ресурсов
+  - name: Bookings
+    description: Бронирования
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Проверить состояние API и базы данных
+      responses:
+        "200":
+          description: API и база данных доступны
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+                app: booking-platform-api
+                database: ok
+        "503":
+          description: База данных недоступна
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /resources:
+    get:
+      tags:
+        - Resources
+      summary: Получить список ресурсов
+      responses:
+        "200":
+          description: Список ресурсов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Resource"
+
+    post:
+      tags:
+        - Resources
+      summary: Создать ресурс
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateResourceRequest"
+            example:
+              name: Room 101
+              type: room
+              description: Small meeting room
+      responses:
+        "201":
+          description: Ресурс создан
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Resource"
+        "400":
+          description: Некорректное тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /resources/{resource_id}/slots:
+    get:
+      tags:
+        - Slots
+      summary: Получить все слоты ресурса
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Список слотов ресурса
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Slot"
+        "500":
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      tags:
+        - Slots
+      summary: Создать слот для ресурса
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSlotRequest"
+            example:
+              starts_at: "2026-06-29T10:00:00+02:00"
+              ends_at: "2026-06-29T11:00:00+02:00"
+      responses:
+        "201":
+          description: Слот создан
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Slot"
+        "400":
+          description: Некорректное тело запроса или время
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /resources/{resource_id}/available-slots:
+    get:
+      tags:
+        - Slots
+      summary: Получить только доступные слоты ресурса
+      description: Возвращает слоты, у которых нет активного бронирования со статусом confirmed.
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Список доступных слотов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Slot"
+        "500":
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bookings:
+    get:
+      tags:
+        - Bookings
+      summary: Получить список бронирований
+      responses:
+        "200":
+          description: Список бронирований
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Booking"
+
+    post:
+      tags:
+        - Bookings
+      summary: Создать бронирование
+      description: |
+        Создает бронирование для слота.
+
+        Если слот уже имеет активное бронирование, API возвращает 409 Conflict.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookingRequest"
+            example:
+              slot_id: fd757e71-2777-475f-b02a-13f9353d299d
+              user_name: Yana
+      responses:
+        "201":
+          description: Бронирование создано
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "400":
+          description: Некорректное тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Слот уже забронирован
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: slot already booked
+        "500":
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bookings/{booking_id}:
+    delete:
+      tags:
+        - Bookings
+      summary: Отменить бронирование
+      description: Меняет статус бронирования с confirmed на cancelled.
+      parameters:
+        - $ref: "#/components/parameters/BookingID"
+      responses:
+        "200":
+          description: Бронирование отменено
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "404":
+          description: Активное бронирование не найдено
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  parameters:
+    ResourceID:
+      name: resource_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: 20847607-a9f7-4a8e-b7df-5d7a3e14a3d0
+
+    BookingID:
+      name: booking_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        app:
+          type: string
+          example: booking-platform-api
+        database:
+          type: string
+          example: ok
+      required:
+        - status
+        - app
+        - database
+
+    Resource:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Room 101
+        type:
+          type: string
+          example: room
+        description:
+          type: string
+          example: Small meeting room
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - type
+        - description
+        - created_at
+
+    CreateResourceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Room 101
+        type:
+          type: string
+          example: room
+        description:
+          type: string
+          example: Small meeting room
+      required:
+        - name
+        - type
+
+    Slot:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        resource_id:
+          type: string
+          format: uuid
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - resource_id
+        - starts_at
+        - ends_at
+        - created_at
+
+    CreateSlotRequest:
+      type: object
+      properties:
+        starts_at:
+          type: string
+          format: date-time
+          example: "2026-06-29T10:00:00+02:00"
+        ends_at:
+          type: string
+          format: date-time
+          example: "2026-06-29T11:00:00+02:00"
+      required:
+        - starts_at
+        - ends_at
+
+    Booking:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slot_id:
+          type: string
+          format: uuid
+        user_name:
+          type: string
+          example: Yana
+        status:
+          type: string
+          enum:
+            - confirmed
+            - cancelled
+          example: confirmed
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - slot_id
+        - user_name
+        - status
+        - created_at
+
+    CreateBookingRequest:
+      type: object
+      properties:
+        slot_id:
+          type: string
+          format: uuid
+        user_name:
+          type: string
+          example: Yana
+      required:
+        - slot_id
+        - user_name
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: slot already booked
+      required:
+        - error
